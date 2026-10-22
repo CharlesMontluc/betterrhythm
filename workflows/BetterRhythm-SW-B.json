@@ -1,0 +1,213 @@
+{
+  "name": "BetterRhythm - SW-B Error Logger",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d37360bb-18f2-4c58-b577-b91e854ebca1",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 966421537,
+          "mode": "list",
+          "cachedResultName": "errors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=966421537"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "error": "={{ $json.error }}",
+            "node": "={{ $json.node }}",
+            "chat_id": "={{ $json.chat_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "node",
+              "displayName": "node",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error",
+              "displayName": "error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "92d49722-4e9c-4fd4-84a5-80d2d19bbf71",
+      "name": "Log to Sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('When Executed by Another Workflow').first().json.chat_id }}",
+        "text": "Apologies! Something went wrong on our side and your request was not fully processed. Please try again in a minute. We apologize for the inconvenience!",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "a0291cdc-28b8-4847-83de-0f1187e57b39",
+      "name": "Send Fallback Reply",
+      "webhookId": "1ec8b87d-6bf1-44bd-97fa-600ccf016a49",
+      "credentials": {
+        "telegramApi": {
+          "id": "xejYUWW4BRr5RPQg",
+          "name": "Telegram Better Rhythm"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        384,
+        176
+      ],
+      "id": "a754aa4c-8e0e-4d7e-a4e1-e41053e6ed39",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "chatId": "8095666469",
+        "text": "=⚠️ BetterRhythm error      Workflow: {{ $json.workflow.name }}      Node: {{ $json.execution.lastNodeExecuted }}      Error: {{ $json.execution.error.message }}      Execution: {{ $json.execution.url }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        608,
+        176
+      ],
+      "id": "ba646403-e1af-417b-af9f-4e4ddaa771bc",
+      "name": "Send a text message",
+      "webhookId": "0a3f8f07-aca4-4499-801f-118ce4d9c5a0",
+      "credentials": {
+        "telegramApi": {
+          "id": "xejYUWW4BRr5RPQg",
+          "name": "Telegram Better Rhythm"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Log to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Fallback Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "752e80b5-d8a1-4b0e-82b8-213de98b5a94",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6af719224529bfd282fedd26513eb114ddd42c0992f2167fe2ec18738b217da6"
+  },
+  "nodeGroups": [],
+  "id": "iFJN8Xdaf9CIrfBV",
+  "tags": []
+}

@@ -1,0 +1,19 @@
+date,task,category,planned_start,planned_end,planned_min,actual_start,actual_end,actual_min,status
+2026-10-08,report draft,deep,09:00,11:00,120,09:00,11:30,150,done
+2026-10-08,emails,light,11:15,11:45,30,11:30,12:10,40,done
+2026-10-08,statistics revision,deep,14:00,16:00,120,14:30,17:00,150,done
+2026-10-08,gym,outdoor,17:00,18:00,60,17:00,18:00,60,done
+2026-10-09,project slides,deep,09:00,11:00,120,09:15,11:45,150,done
+2026-10-09,groceries,light,12:00,12:30,30,12:00,12:40,40,done
+2026-10-09,reading,deep,15:00,16:30,90,15:30,17:30,120,done
+2026-10-09,run,outdoor,18:00,18:45,45,,,,skipped
+2026-10-10,report draft,deep,10:00,12:00,120,10:00,12:30,150,done
+2026-10-10,laundry,light,13:00,13:30,30,13:00,13:30,30,done
+2026-10-10,walk,outdoor,16:00,17:00,60,16:00,17:00,60,done
+2026-10-11,statistics exercises,deep,09:30,11:30,120,09:30,12:00,150,done
+2026-10-11,coding assignment,deep,14:00,16:00,120,14:00,17:00,180,done
+2026-10-11,call parents,light,18:00,18:30,30,18:00,18:45,45,done
+2026-10-12,report final,deep,09:00,11:00,120,09:00,11:20,140,done
+2026-10-12,emails,light,11:30,12:00,30,11:30,12:00,30,done
+2026-10-12,meeting prep,light,15:00,15:30,30,15:00,15:45,45,done
+2026-10-12,gym,outdoor,17:30,18:30,60,17:30,18:30,60,done

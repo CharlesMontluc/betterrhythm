@@ -1,0 +1,153 @@
+{
+  "name": "BetterRhythm - SW-A Load Profile.",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3cc7010a-1af9-4067-8739-c3167d02df2d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 329959528,
+          "mode": "list",
+          "cachedResultName": "profile",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=329959528"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "e2f487d6-bf93-4bb4-9eb8-3d5be9754ddd",
+      "name": "Read Profile",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        0
+      ],
+      "id": "a3d338ea-9a86-4465-830d-116529a6d6e9",
+      "name": "Read Tasks",
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---- Build Profile (Sub-workflow A) ----\n// Turns the raw sheet rows into a clean profile, with safe defaults.\n\nconst DEFAULTS = { peak_start: 9, peak_end: 12, time_factor: 1.0, energy: 'normal' };\n\nconst profileRow = $('Read Profile').all().map(i => i.json).find(r => r.peak_hours !== undefined) || {};\nconst taskRows = $('Read Tasks').all().map(i => i.json).filter(r => r.date && r.task);\n\n// \"09:30\" -> 570 (minutes since midnight), empty -> null\nconst toMin = (t) => {\n  const m = String(t ?? '').match(/^(\\d{1,2}):(\\d{2})/);\n  return m ? Number(m[1]) * 60 + Number(m[2]) : null;\n};\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(',', '.'));\n  return Number.isFinite(n) ? n : null;\n};\n\n// Peak hours, stored as \"9-12\"\nlet peak_start = DEFAULTS.peak_start;\nlet peak_end = DEFAULTS.peak_end;\nconst pm = String(profileRow.peak_hours ?? '').match(/^(\\d{1,2})\\s*-\\s*(\\d{1,2})$/);\nif (pm && Number(pm[2]) > Number(pm[1])) {\n  peak_start = Number(pm[1]);\n  peak_end = Number(pm[2]);\n}\n\n// Time factor, kept in a sane range\nlet time_factor = num(profileRow.time_factor);\nif (time_factor === null || time_factor < 0.5 || time_factor > 3) time_factor = DEFAULTS.time_factor;\n\nconst recent_energy = ['low', 'normal', 'high'].includes(profileRow.recent_energy)\n  ? profileRow.recent_energy\n  : DEFAULTS.energy;\n\n// Forbidden hours, stored as \"12:00-14:00\" or \"12:00-14:00, 19:00-20:00\"\nconst blocked_hours_raw = String(profileRow.blocked_hours ?? '').trim();\nconst blocked = blocked_hours_raw\n  .split(',')\n  .map(s => s.trim().match(/^(\\d{1,2}):(\\d{2})\\s*-\\s*(\\d{1,2}):(\\d{2})$/))\n  .filter(Boolean)\n  .map(m => ({ start: Number(m[1]) * 60 + Number(m[2]), end: Number(m[3]) * 60 + Number(m[4]) }))\n  .filter(b => b.end > b.start);\n\n// Last saved plan (used by /replan)\nlet last_plan = null;\ntry {\n  last_plan = profileRow.last_plan_json ? JSON.parse(profileRow.last_plan_json) : null;\n} catch (e) {\n  last_plan = null;\n}\n\n// Clean task rows\nconst rows = taskRows.map(r => ({\n  row_number: r.row_number,\n  date: String(r.date),\n  task: String(r.task).trim().toLowerCase(),\n  category: ['deep', 'light', 'outdoor'].includes(r.category) ? r.category : 'light',\n  planned_start: toMin(r.planned_start),\n  planned_end: toMin(r.planned_end),\n  planned_min: num(r.planned_min),\n  actual_start: toMin(r.actual_start),\n  actual_end: toMin(r.actual_end),\n  actual_min: num(r.actual_min),\n  status: r.status || 'planned',\n}));\n\nconst today = $now.toFormat('yyyy-MM-dd');\n\nreturn [{\n  json: {\n    peak_start,\n    peak_end,\n    peak_hours: `${peak_start}-${peak_end}`,\n    time_factor,\n    recent_energy,\n    blocked,\n    blocked_hours_raw,\n    last_plan,\n    today: today,\n    today_planned: rows.filter(r => r.date === today && r.status === 'planned'),\n    history: rows.filter(r => r.status === 'done' && r.planned_min && r.actual_min).slice(-50),\n    has_history: rows.some(r => r.status === 'done'),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "616c63d1-5f72-4852-9a10-50ef59e0fa5e",
+      "name": "Build Profile"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Read Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Profile": {
+      "main": [
+        [
+          {
+            "node": "Read Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tasks": {
+      "main": [
+        [
+          {
+            "node": "Build Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "iFJN8Xdaf9CIrfBV",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "5ffa3388-ec3f-4a90-9a84-e4136fba61e2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6af719224529bfd282fedd26513eb114ddd42c0992f2167fe2ec18738b217da6"
+  },
+  "nodeGroups": [],
+  "id": "5txGo1syMEcwa8HX",
+  "tags": []
+}

@@ -1,0 +1,1810 @@
+{
+  "name": "Better Rhythm - Main",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -576,
+        976
+      ],
+      "id": "0b29b060-ee1d-4cbf-aeed-67b48c8996e2",
+      "name": "Telegram Trigger",
+      "webhookId": "ded647ac-60ef-4da7-8af9-0d0e5ffe0171",
+      "credentials": {
+        "telegramApi": {
+          "id": "xejYUWW4BRr5RPQg",
+          "name": "Telegram Better Rhythm"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---- Parse Command (step 2) ----\n// Reads the Telegram message, extracts the command and the free text,\n// checks the strict /done format, and prepares the help text.\n\nconst msg = $input.first().json.message || {};\nconst raw = (msg.text || '').trim();\nconst chat_id = msg.chat?.id;\nconst sender = msg.from?.first_name || '';\n\n// Escape text before putting it in a Telegram HTML message\nconst esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst USAGE = [\n  '<b>BetterRhythm commands</b>',\n  '',\n  '/plan: plan your day',\n  '<code>/plan finish report, dentist 15:00, gym, slept badly</code>',\n  '',\n  '/replan: change today\\'s plan',\n  '<code>/replan dentist moved to 17:00</code>',\n  '',\n  '/done: tell me how the day went',\n  '<code>/done report 9-12, gym skipped</code>',\n  '',\n  '/help: show this list',\n].join('\\n');\n\n// \"/plan@MyBot some text\" -> cmd = \"plan\", text = \"some text\"\nconst m = raw.match(/^\\/(\\w+)(?:@\\w+)?\\s*([\\s\\S]*)$/);\nlet cmd = m ? m[1].toLowerCase() : 'unknown';\nconst text = m ? m[2].trim() : raw;\n\nlet reply = '';\nlet done_items = [];\n\nif (!['plan', 'replan', 'done', 'help'].includes(cmd)) {\n  // Unknown command or plain text -> show help\n  cmd = 'help';\n  reply = (raw ? \"I didn't recognise that.\\n\\n\" : '') + USAGE;\n\n} else if (cmd === 'help') {\n  reply = USAGE;\n\n} else if (!text) {\n  // /plan, /replan or /done with nothing after it\n  reply = `Please add some details after /${cmd}.\\n\\n` + USAGE;\n  cmd = 'help';\n\n} else if (cmd === 'done') {\n  // Strict format: \"task 9-12, task 14:30-16, task skipped\"\n  const range = /^(.+?)\\s+(\\d{1,2})(?::(\\d{2}))?\\s*-\\s*(\\d{1,2})(?::(\\d{2}))?$/;\n  const bad = [];\n\n  for (const part of text.split(',').map(p => p.trim()).filter(Boolean)) {\n    const skip = part.match(/^(.+?)\\s+skipped$/i);\n    const r = part.match(range);\n\n    if (skip) {\n      done_items.push({ task: skip[1].trim().toLowerCase(), status: 'skipped' });\n    } else if (r) {\n      const start = Number(r[2]) * 60 + Number(r[3] || 0); // minutes since midnight\n      const end = Number(r[4]) * 60 + Number(r[5] || 0);\n      if (Number(r[2]) > 23 || Number(r[4]) > 23 || end <= start) {\n        bad.push(part);\n      } else {\n        done_items.push({ task: r[1].trim().toLowerCase(), status: 'done', start, end });\n      }\n    } else {\n      bad.push(part);\n    }\n  }\n\n  if (bad.length) {\n    reply = `I couldn't read: <i>${esc(bad.join(', '))}</i>\\n\\n` +\n            'Use this format:\\n<code>/done report 9-12, emails 14:30-15, gym skipped</code>';\n    cmd = 'help';\n    done_items = [];\n  }\n}\n\nreturn [{ json: { cmd, text, chat_id, sender, reply, done_items } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        976
+      ],
+      "id": "6323a892-e640-4bc0-a64c-256b79fe42d3",
+      "name": "Parse Command"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Parse Command').first().json.cmd }}",
+                    "rightValue": "plan",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "bfba2ca2-a7d0-4b0b-a550-9bc9fa39d8de"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "plan"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4f972839-f66f-4ce4-b614-508bd10f99fe",
+                    "leftValue": "={{ $('Parse Command').first().json.cmd }}",
+                    "rightValue": "replan",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "replan"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "56ea16cb-34ec-4f95-90b5-1fd81e9812d0",
+                    "leftValue": "={{ $('Parse Command').first().json.cmd }}",
+                    "rightValue": "done",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "done"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "a96114f4-fd93-42c1-a7da-e2b422d010da",
+                    "leftValue": "={{ $('Parse Command').first().json.cmd }}",
+                    "rightValue": "help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "help"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        96,
+        624
+      ],
+      "id": "2b26b596-0053-4ed2-9569-3287b48c63e5",
+      "name": "Command Router"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Command').first().json.chat_id }}",
+        "text": "={{ ['plan','replan'].includes($('Parse Command').first().json.cmd) ? $('Final Reply').first().json.reply : ($('Parse Command').first().json.cmd === 'done' ? $('Update Profile').first().json.reply : $('Parse Command').first().json.reply) }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2752,
+        400
+      ],
+      "id": "b3a6da9c-222f-4ea6-94fe-b11954565403",
+      "name": "Send Telegram Message",
+      "webhookId": "11918153-fe4b-467e-9e32-eefce03d5da1",
+      "executeOnce": true,
+      "retryOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "xejYUWW4BRr5RPQg",
+          "name": "Telegram Better Rhythm"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "5txGo1syMEcwa8HX",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/5txGo1syMEcwa8HX",
+          "cachedResultName": "BetterRhythm - SW-A Load Profile."
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -128,
+        976
+      ],
+      "id": "a2b17bf7-0092-443b-87c9-7c6d98119948",
+      "name": "Load Profile",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---- Update Profile (step 4a) ----\n// Compares what was planned today with what really happened,\n// then updates the time factor and the peak hours.\n\nconst parsed = $('Parse Command').first().json;\nconst profile = $('Load Profile').first().json;\nconst items = parsed.done_items || [];\nconst planned = [...(profile.today_planned || [])].reverse(); // newest plan first (after /replan)\nconst history = profile.history || [];\n\nconst esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;\n\n// Match \"report\" with the planned task (exact name first, then partial)\nconst used = new Set();\nconst findPlanned = (name) => {\n  let p = planned.find(t => !used.has(t.row_number) && t.task === name);\n  if (!p) p = planned.find(t => !used.has(t.row_number) && (t.task.includes(name) || name.includes(t.task)));\n  if (p) used.add(p.row_number);\n  return p;\n};\n\nconst task_updates = [];  // rows to update in the tasks tab\nconst unmatched = [];     // reported tasks that were not in the plan\nconst todayDone = [];     // done tasks used for learning\nlet skipped = 0;\n\nfor (const it of items) {\n  const p = findPlanned(it.task);\n  if (!p) { unmatched.push(it.task); continue; }\n\n  if (it.status === 'skipped') {\n    skipped++;\n    task_updates.push({ row_number: p.row_number, status: 'skipped' });\n  } else {\n    const actual_min = it.end - it.start;\n    task_updates.push({\n      row_number: p.row_number,\n      actual_start: hhmm(it.start),\n      actual_end: hhmm(it.end),\n      actual_min,\n      status: 'done',\n    });\n    if (p.planned_min) todayDone.push({ ...p, actual_start: it.start, actual_end: it.end, actual_min });\n  }\n}\n\n// 1) Time factor: how much longer than estimated tasks really take.\n//    Smoothed so one bad day doesn't swing it too much.\nconst oldTf = profile.time_factor;\nlet newTf = oldTf;\nlet ratio = null;\nif (todayDone.length) {\n  const sumPlanned = todayDone.reduce((s, t) => s + t.planned_min, 0);\n  const sumActual = todayDone.reduce((s, t) => s + t.actual_min, 0);\n  ratio = sumActual / sumPlanned;\n  newTf = Math.min(3, Math.max(0.5, 0.7 * oldTf + 0.3 * ratio));\n  newTf = Math.round(newTf * 100) / 100;\n}\n\n// 2) Peak hours: the 3-hour window where deep work goes most to plan\n//    (efficiency = planned / actual, higher is better; needs 2+ tasks).\nconst deep = [...history, ...todayDone].filter(t =>\n  t.category === 'deep' && t.actual_start != null && t.planned_min && t.actual_min);\n\nlet peak_start = profile.peak_start;\nlet peak_end = profile.peak_end;\nlet best = null;\nconst startHours = [...new Set(deep.map(t => Math.floor(t.actual_start / 60)))];\n\nfor (const h of startHours) {\n  const inWindow = deep.filter(t => {\n    const sh = Math.floor(t.actual_start / 60);\n    return sh >= h && sh < h + 3;\n  });\n  if (inWindow.length < 2) continue;\n  const eff = inWindow.reduce((s, t) => s + t.planned_min / t.actual_min, 0) / inWindow.length;\n  if (!best || eff > best.eff) best = { h, eff };\n}\nif (best) { peak_start = best.h; peak_end = best.h + 3; }\nconst peakChanged = peak_start !== profile.peak_start || peak_end !== profile.peak_end;\n\n// 3) Reply message\nconst lines = ['<b>Day logged</b>', ''];\nif (ratio !== null) {\n  const pct = Math.round(Math.abs(ratio - 1) * 100);\n  lines.push(pct === 0\n    ? 'Today your estimates were spot on.'\n    : `Today tasks took ${pct}% ${ratio > 1 ? 'longer' : 'less time'} than estimated.`);\n  lines.push(`Time factor: ${oldTf} → <b>${newTf}</b>`);\n}\nlines.push(`Peak focus hours: <b>${peak_start}:00–${peak_end}:00</b> ${peakChanged ? '(updated)' : '(unchanged)'}`);\nif (skipped) lines.push(`Skipped: ${skipped} task${skipped > 1 ? 's' : ''}`);\nif (unmatched.length) lines.push(`Not in today's plan, so not used for learning: <i>${esc(unmatched.join(', '))}</i>`);\nif (ratio === null && !skipped) lines.push(\"I couldn't match anything to today's plan. Did you send /plan today?\");\n\nreturn [{\n  json: {\n    reply: lines.join('\\n'),\n    profile_row: {\n      row_number: 2,\n      peak_hours: `${peak_start}-${peak_end}`,\n      time_factor: newTf,\n      recent_energy: profile.recent_energy,\n      last_plan_json: profile.last_plan ? JSON.stringify(profile.last_plan) : '',\n      updated_at: $now.toISO(),\n    },\n    signal_row: {\n      date: profile.today,\n      cmd: 'done',\n      energy: profile.recent_energy,\n      raw_text: parsed.text,\n      weather_ok: '',\n    },\n    task_updates,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        960
+      ],
+      "id": "88c52685-1c5a-4e31-9ada-fb8dea5565f4",
+      "name": "Update Profile"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 329959528,
+          "mode": "list",
+          "cachedResultName": "profile",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=329959528"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "last_plan_json": "={{ $json.profile_row.last_plan_json }}",
+            "updated_at": "={{ $json.profile_row.updated_at }}",
+            "recent_energy": "={{ $json.profile_row.recent_energy }}",
+            "time_factor": "={{ $json.profile_row.time_factor }}",
+            "peak_hours": "={{ $json.profile_row.peak_hours }}",
+            "row_number": "={{ $json.profile_row.row_number }}",
+            "blocked_hours": "={{ $('Load Profile').first().json.blocked_hours_raw }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "peak_hours",
+              "displayName": "peak_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "time_factor",
+              "displayName": "time_factor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recent_energy",
+              "displayName": "recent_energy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_plan_json",
+              "displayName": "last_plan_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "blocked_hours",
+              "displayName": "blocked_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1920,
+        1056
+      ],
+      "id": "dcde731b-db34-4d7f-b8b2-fe0d9c2e3df0",
+      "name": "Save Profile",
+      "retryOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2139319821,
+          "mode": "list",
+          "cachedResultName": "signals",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=2139319821"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $('Update Profile').first().json.signal_row.date }}",
+            "cmd": "={{ $('Update Profile').first().json.signal_row.cmd }}",
+            "energy": "={{ $('Update Profile').first().json.signal_row.energy }}",
+            "raw_text": "={{ $('Update Profile').first().json.signal_row.raw_text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cmd",
+              "displayName": "cmd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "energy",
+              "displayName": "energy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "raw_text",
+              "displayName": "raw_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "weather_ok",
+              "displayName": "weather_ok",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2144,
+        976
+      ],
+      "id": "e3ee24e2-50b2-4bd1-b801-5f1a2a25fd0a",
+      "name": "Save Signal",
+      "retryOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "task_updates",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        784
+      ],
+      "id": "751fbc15-b9db-4c5e-9d60-36735840b9bc",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "task",
+              "displayName": "task",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "planned_start",
+              "displayName": "planned_start",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "planned_end",
+              "displayName": "planned_end",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "planned_min",
+              "displayName": "planned_min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actual_start",
+              "displayName": "actual_start",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actual_end",
+              "displayName": "actual_end",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actual_min",
+              "displayName": "actual_min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2368,
+        784
+      ],
+      "id": "89305948-655c-4f39-ab4c-9de5bf4ef70b",
+      "name": "Save Task Updates",
+      "retryOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://api.open-meteo.com/v1/forecast?latitude=48.85&longitude=2.35&hourly=precipitation_probability&timezone=Europe%2FParis&forecast_days=2",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        320,
+        224
+      ],
+      "id": "354a022b-f54c-47a8-bbab-4d476ee22f45",
+      "name": "Fetch Weather",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": "poolside/laguna-s-2.1:free",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        560,
+        464
+      ],
+      "id": "21cd1b5a-6c5a-470d-96ad-da4fd07efa5b",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "5CN8AEdh8EKjfnRe",
+          "name": "Better Rhythm Open Router"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"tasks\": [\n    { \"name\": \"finish report\", \"category\": \"deep\", \"minutes\": 120 }\n  ],\n  \"fixed_events\": [\n    { \"name\": \"dentist\", \"start\": \"15:00\", \"minutes\": 60 }\n  ],\n  \"other_days\": [\n    { \"name\": \"gym\", \"when\": \"tomorrow 21:00\" }\n  ],\n  \"energy\": \"low\",\n  \"constraints\": { \"day_start\": \"\", \"day_end\": \"\" }\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        752,
+        480
+      ],
+      "id": "a83e07ee-704f-4f65-a86a-c21a38ff57e9",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "promptType": "=define",
+        "text": "=Current time: {{ $now.toFormat('HH:mm') }}\nDay being planned: {{ $now.hour >= 17 ? 'tomorrow, ' + $now.plus({ days: 1 }).toFormat('cccc d LLLL') : 'today, ' + $now.toFormat('cccc d LLLL') }}\nUser message: {{ $('Parse Command').first().json.text }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You turn a person's description of their day into JSON. Return only JSON, nothing else.  Only include tasks and events for the day being planned. If the user explicitly puts something on another day (for example \"tomorrow\" when today is being planned, or \"on Monday\"), do not put it in tasks or fixed_events: put it in other_days instead.  tasks: things to do that have NO fixed time. - name: short, lowercase, 1 to 3 words (e.g. \"finish report\", \"emails\"). - category: \"deep\" for focused work (report, study, revision, coding, writing, slides);   \"outdoor\" for sport or anything done outside (gym, run, walk, groceries);   \"light\" for everything else (emails, calls, chores, admin). - minutes: the user's estimate if they give one, otherwise a realistic guess   (deep 90 to 120, light 20 to 45, outdoor 45 to 60).  fixed_events: anything with a specific time (\"dentist 15:00\", \"meeting at 2pm\"). - name: short, lowercase. - start: 24-hour \"HH:MM\". - minutes: the duration if given, otherwise 60.  other_days: things meant for another day than the one being planned. - name: short, lowercase. - when: short text, e.g. \"tomorrow 21:00\" or \"monday\".  energy: \"low\" if they mention sleeping badly, being tired or sick; \"high\" if they mention feeling great or well rested; otherwise \"normal\".  constraints: - day_start: \"HH:MM\" if they say when they start, otherwise \"\". - day_end: \"HH:MM\" if they say when they must stop, otherwise \"\".  Never invent tasks the user did not mention. Always include every key: tasks, fixed_events, other_days, energy, constraints. Use [] for empty lists."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        768,
+        224
+      ],
+      "id": "8922cedb-fe39-428a-9785-4e09158723f6",
+      "name": "Extract",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5136742c-a8b3-42f4-86b5-e51459cac906",
+              "name": "tasks",
+              "value": "={{ (() => { const o = $json.output; if (o && Array.isArray(o.tasks)) { return o.tasks.filter(t => t && t.name).map(t => ({ name: String(t.name).toLowerCase().trim(), category: ['deep','light','outdoor'].includes(t.category) ? t.category : 'light', minutes: Number(t.minutes) > 0 ? Math.min(Number(t.minutes), 240) : 30 })); } return String($('Parse Command').first().json.text).split(',').map(s => s.trim().toLowerCase()).filter(s => s && !/\\d{1,2}:\\d{2}/.test(s) && !/\\b(tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b/.test(s) && !/\\b(slept|tired|sick)\\b/.test(s)).map(s => { const d = s.match(/\\((\\d+(?:\\.\\d+)?)\\s*(h|hours?|min|minutes?)\\)/); const minutes = d ? Math.round(Number(d[1]) * (d[2].startsWith('h') ? 60 : 1)) : 30; return { name: s.replace(/\\(.*?\\)/g, '').trim(), category: 'light', minutes }; }); })() }}",
+              "type": "array"
+            },
+            {
+              "id": "1f1472d6-878d-4a56-bae2-b32375d1c54f",
+              "name": "fixed_events",
+              "value": "={{ (() => { const o = $json.output; if (o && Array.isArray(o.fixed_events)) { return o.fixed_events.filter(e => e && /^\\d{1,2}:\\d{2}$/.test(e.start)).map(e => ({ name: String(e.name || 'event').toLowerCase().trim(), start: e.start.padStart(5, '0'), minutes: Number(e.minutes) > 0 ? Number(e.minutes) : 60 })); } return String($('Parse Command').first().json.text).split(',').map(s => s.trim().toLowerCase()).filter(s => !/\\b(tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b/.test(s)).map(s => ({ s, m: s.match(/(\\d{1,2}):(\\d{2})/) })).filter(x => x.m && Number(x.m[1]) < 24).map(x => ({ name: x.s.replace(/\\bat\\b/g, '').replace(/\\d{1,2}:\\d{2}/, '').trim() || 'event', start: x.m[1].padStart(2, '0') + ':' + x.m[2], minutes: 60 })); })() }}",
+              "type": "array"
+            },
+            {
+              "id": "0368d144-08a1-48f0-8e80-d8cf00298e7d",
+              "name": "energy",
+              "value": "={{ ['low','normal','high'].includes($json.output?.energy) ? $json.output.energy : (/slept badly|tired|sick|exhausted/i.test($('Parse Command').first().json.text) ? 'low' : 'normal') }}",
+              "type": "string"
+            },
+            {
+              "id": "86fa3040-9423-412a-b6f5-40bb14da3d65",
+              "name": "day_start",
+              "value": "={{ /^\\d{1,2}:\\d{2}$/.test($json.output?.constraints?.day_start ?? '') ? $json.output.constraints.day_start : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "48ab86c7-dad9-4f4a-92c6-45561c5ef65b",
+              "name": "day_end",
+              "value": "={{ /^\\d{1,2}:\\d{2}$/.test($json.output?.constraints?.day_end ?? '') ? $json.output.constraints.day_end : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "d1582d98-c730-4689-a1eb-c10e28ce1fb4",
+              "name": "other_days",
+              "value": "={{ (Array.isArray($json.output?.other_days) ? $json.output.other_days : []).filter(o => o && o.name).map(o => ({ name: String(o.name).toLowerCase().trim(), when: String(o.when || '') })) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1120,
+        224
+      ],
+      "id": "c6e2863b-e54d-49e4-8319-636ddd82413d",
+      "name": "Validate"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---- Build Schedule (step 8) ----\n// Places fixed events (typed + Google Calendar), then deep work in peak hours,\n// outdoor tasks in dry hours and light tasks in the gaps. Durations use the\n// learned time factor and today's energy. Respects forbidden hours.\n// Flags conflicts and drops what does not fit.\n\nconst v = $('Validate').first().json;\nconst profile = $('Load Profile').first().json;\nconst cmd = $('Parse Command').first().json.cmd;\n\nlet weather = null;\ntry { weather = $('Fetch Weather').first().json; } catch (e) { weather = null; }\n\nconst STEP = 15; // minutes\nconst toMin = (t) => {\n  const m = String(t ?? '').match(/^(\\d{1,2}):(\\d{2})$/);\n  return m ? Number(m[1]) * 60 + Number(m[2]) : null;\n};\nconst hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;\nconst roundUp = (m) => Math.ceil(m / STEP) * STEP;\n\nconst now = $now;\nconst todayStr = now.toFormat('yyyy-MM-dd');\nconst tomorrowStr = now.plus({ days: 1 }).toFormat('yyyy-MM-dd');\nconst nowMin = now.hour * 60 + now.minute;\n\n// ---------- 1) Inputs (merged with the last plan for /replan) ----------\nlet tasks = v.tasks || [];\nlet fixed = v.fixed_events || [];\nlet energy = v.energy || 'normal';\nlet dayStartC = v.day_start;\nlet dayEndC = v.day_end;\nlet targetDate;\n\nconst last = profile.last_plan;\n\nif (cmd === 'replan' && last && last.date >= todayStr) {\n  const sameName = (a, b) => a.includes(b) || b.includes(a);\n  // New fixed events replace old ones with the same name\n  fixed = [\n    ...(last.fixed_events || []).filter(e => !fixed.some(n => sameName(n.name, e.name))),\n    ...fixed,\n  ];\n  // Keep the old tasks, add new ones, and don't keep a task that became a fixed event\n  tasks = [\n    ...(last.tasks || []).filter(t => !fixed.some(e => sameName(e.name, t.name))),\n    ...tasks.filter(t => !(last.tasks || []).some(o => sameName(o.name, t.name))),\n  ];\n  if (energy === 'normal' && last.energy) energy = last.energy;\n  dayStartC = dayStartC || last.day_start || '';\n  dayEndC = dayEndC || last.day_end || '';\n  targetDate = last.date;\n} else {\n  targetDate = now.hour >= 17 ? tomorrowStr : todayStr;\n}\n\nconst isToday = targetDate === todayStr;\nconst dateLabel = isToday ? 'today' : (targetDate === tomorrowStr ? 'tomorrow' : targetDate);\n\n// ---------- 1b) Google Calendar events for the planned day ----------\nlet calendar = null;\ntry { calendar = $('Fetch Calendar').first().json; } catch (e) { calendar = null; }\nconst calendar_ok = Array.isArray(calendar?.items);\nconst sameText = (a, b) => {\n  a = String(a).toLowerCase();\n  b = String(b).toLowerCase();\n  return a.includes(b) || b.includes(a);\n};\nconst calendarEvents = [];\nfor (const ev of (calendar?.items || [])) {\n  if (ev.status === 'cancelled') continue;\n  const sIso = ev.start?.dateTime;\n  const eIso = ev.end?.dateTime;\n  if (!sIso || !eIso) continue; // all-day events are not time blocks\n  const st = DateTime.fromISO(sIso).setZone('Europe/Paris');\n  const en = DateTime.fromISO(eIso).setZone('Europe/Paris');\n  if (st.toFormat('yyyy-MM-dd') !== targetDate) continue;\n  let startMin = st.hour * 60 + st.minute;\n  const endMin = en.toFormat('yyyy-MM-dd') === targetDate ? en.hour * 60 + en.minute : 24 * 60;\n  if (isToday && endMin <= nowMin) continue;                     // already over\n  if (isToday && startMin < nowMin) startMin = roundUp(nowMin);  // already started\n  const name = String(ev.summary || 'busy').trim();\n  const start = hhmm(startMin);\n  // Skip it if the user also typed the same event in their message\n  if (fixed.some(f => f.start === start || sameText(f.name, name))) continue;\n  calendarEvents.push({ name, start, minutes: Math.max(STEP, endMin - startMin), source: 'calendar' });\n}\nfixed = [...fixed, ...calendarEvents];\n\nlet dayStart = roundUp(toMin(dayStartC) ?? 8 * 60);\nif (isToday) dayStart = Math.max(dayStart, roundUp(nowMin));\nconst dayEnd = toMin(dayEndC) ?? 22 * 60;\n\n// ---------- 2) Durations ----------\nconst tf = profile.time_factor || 1;\nconst energyFactor = { low: 1.15, normal: 1, high: 0.95 }[energy] ?? 1;\nconst blockLen = (base) => Math.max(STEP, roundUp(base * tf * energyFactor));\nconst breakAfterDeep = energy === 'low' ? 30 : 15;\nconst peak = [profile.peak_start * 60, profile.peak_end * 60];\n\n// ---------- 3) Weather: rain probability per hour of the target day ----------\nconst RAIN = 50; // % from which an hour counts as rainy\nconst rain = {};\nconst times = weather?.hourly?.time;\nconst probs = weather?.hourly?.precipitation_probability;\nif (Array.isArray(times) && Array.isArray(probs)) {\n  times.forEach((t, i) => {\n    if (String(t).startsWith(targetDate) && probs[i] !== null) rain[Number(String(t).slice(11, 13))] = probs[i];\n  });\n}\nconst weather_ok = Object.keys(rain).length > 0;\nconst isWet = (start, len) => {\n  for (let h = Math.floor(start / 60); h * 60 < start + len; h++) {\n    if ((rain[h] ?? 0) >= RAIN) return true;\n  }\n  return false;\n};\n\n// ---------- 4) Fixed events first ----------\nconst busy = [];      // blocked intervals, in minutes\nconst schedule = [];  // what the user will see\nconst conflicts = [];\nconst overlaps = (a, b) => a.start < b.end && b.start < a.end;\nconst isFree = (s, e) => s >= dayStart && e <= dayEnd && !busy.some(b => overlaps({ start: s, end: e }, b));\n\n// Forbidden hours from the profile (e.g. lunch): no task gets placed there\nfor (const b of profile.blocked || []) busy.push({ start: b.start, end: b.end, name: 'blocked' });\n\nconst sortedFixed = [...fixed].sort((a, b) => toMin(a.start) - toMin(b.start));\nfor (const ev of sortedFixed) {\n  const s = toMin(ev.start);\n  const e = s + ev.minutes;\n  if (isToday && s < nowMin) {\n    conflicts.push(`${ev.name} at ${ev.start} is already past`);\n    continue;\n  }\n  const clash = schedule.find(b => overlaps({ start: s, end: e }, b));\n  if (clash) conflicts.push(`${ev.name} (${ev.start}) overlaps ${clash.name} (${hhmm(clash.start)})`);\n  if (s < dayStart || e > dayEnd) conflicts.push(`${ev.name} (${ev.start}) is outside your day (${hhmm(dayStart)}–${hhmm(dayEnd)})`);\n  busy.push({ start: s - 15, end: e + 15, name: ev.name }); // 15 min travel buffer\n  schedule.push({ start: s, end: e, name: ev.name, kind: 'fixed', note: ev.source === 'calendar' ? 'from your calendar' : '' });\n}\n\n// ---------- 5) Find the first free slot matching the preferences ----------\nconst findSlot = (len, { within = null, avoid = null, dry = false } = {}) => {\n  for (let s = dayStart; s + len <= dayEnd; s += STEP) {\n    if (!isFree(s, s + len)) continue;\n    if (within && (s < within[0] || s >= within[1])) continue;\n    if (avoid && s < avoid[1] && s + len > avoid[0]) continue;\n    if (dry && isWet(s, len)) continue;\n    return s;\n  }\n  return null;\n};\n\n// ---------- 6) Place tasks: deep, then outdoor, then light ----------\nconst order = { deep: 0, outdoor: 1, light: 2 };\nconst sortedTasks = [...tasks].sort((a, b) => order[a.category] - order[b.category] || b.minutes - a.minutes);\nconst dropped = [];\n\nfor (const t of sortedTasks) {\n  const len = blockLen(t.minutes);\n  let s = null;\n  let note = '';\n\n  if (t.category === 'deep') {\n    // 1) start inside peak hours, 2) otherwise the slot overlapping peak hours most, 3) otherwise anywhere\n    s = findSlot(len, { within: peak });\n    if (s === null) {\n      let bestOverlap = 0;\n      for (let c = dayStart; c + len <= dayEnd; c += STEP) {\n        if (!isFree(c, c + len)) continue;\n        const ov = Math.min(c + len, peak[1]) - Math.max(c, peak[0]);\n        if (ov > bestOverlap) { bestOverlap = ov; s = c; }\n      }\n    }\n    if (s === null) s = findSlot(len);\n    if (s !== null) {\n      const overlap = Math.max(0, Math.min(s + len, peak[1]) - Math.max(s, peak[0]));\n      if (overlap === 0) {\n        note = isToday && dayStart > peak[0] ? 'peak hours already over today' : 'peak hours were full';\n      } else if (s < peak[0] || s + len > peak[1]) {\n        note = 'longer than your peak hours';\n      }\n    }\n  } else if (t.category === 'outdoor') {\n    if (weather_ok) {\n      s = findSlot(len, { dry: true, avoid: peak }) ?? findSlot(len, { dry: true });\n      if (s === null) {\n        s = findSlot(len, { avoid: peak }) ?? findSlot(len);\n        if (s !== null) note = 'rain expected';\n      }\n    } else {\n      s = findSlot(len, { avoid: peak }) ?? findSlot(len);\n    }\n  } else {\n    s = findSlot(len, { avoid: peak }) ?? findSlot(len);\n  }\n\n  if (s === null) {\n    dropped.push({ name: t.name, minutes: len, reason: 'no free slot long enough' });\n    continue;\n  }\n  const buffer = t.category === 'deep' ? breakAfterDeep : 0;\n  busy.push({ start: s, end: s + len + buffer, name: t.name });\n  schedule.push({ start: s, end: s + len, name: t.name, kind: t.category, base_minutes: t.minutes, note });\n}\n\nschedule.sort((a, b) => a.start - b.start);\n\n// ---------- 7) Output ----------\nconst rainy_hours = Object.entries(rain)\n  .filter(([h, p]) => p >= RAIN && Number(h) * 60 >= dayStart && Number(h) * 60 < dayEnd)\n  .map(([h]) => Number(h));\n\nreturn [{\n  json: {\n    cmd,\n    date: targetDate,\n    date_label: dateLabel,\n    day_window: `${hhmm(dayStart)}–${hhmm(dayEnd)}`,\n    energy,\n    time_factor: tf,\n    peak_hours: `${profile.peak_start}:00–${profile.peak_end}:00`,\n    weather_ok,\n    rainy_hours,\n    calendar_ok,\n    calendar_events: calendarEvents.length,\n    schedule: schedule.map(b => ({\n      start: hhmm(b.start),\n      end: hhmm(b.end),\n      name: b.name,\n      kind: b.kind,\n      note: b.note,\n    })),\n    dropped,\n    conflict: conflicts.length > 0,\n    conflicts,\n    other_days: v.other_days || [],\n    // rows for the tasks tab (fixed events are not saved: nothing to learn from them)\n    task_rows: schedule.filter(b => b.kind !== 'fixed').map(b => ({\n      date: targetDate,\n      task: b.name,\n      category: b.kind,\n      planned_start: hhmm(b.start),\n      planned_end: hhmm(b.end),\n      planned_min: b.base_minutes,\n      actual_start: '',\n      actual_end: '',\n      actual_min: '',\n      status: 'planned',\n    })),\n    // saved in the profile so /replan can rebuild from it\n    // (calendar events are not saved: they are re-read fresh from Google each time)\n    last_plan: {\n      date: targetDate,\n      tasks,\n      fixed_events: fixed.filter(f => f.source !== 'calendar'),\n      energy,\n      day_start: dayStartC,\n      day_end: dayEndC,\n    },\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        224
+      ],
+      "id": "f21a91f8-583b-4419-8e78-58a3dbdae5c7",
+      "name": "Build Schedule"
+    },
+    {
+      "parameters": {
+        "model": "poolside/laguna-s-2.1:free",
+        "options": {
+          "timeout": 160000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        496
+      ],
+      "id": "b99bf4a3-218b-4fa5-8248-3b0faeed729a",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "5CN8AEdh8EKjfnRe",
+          "name": "Better Rhythm Open Router"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Date: {{ DateTime.fromISO($json.date).setLocale('en').toFormat('cccc d LLLL') }} ({{ $json.date_label }})\nPlan data:\n{{ JSON.stringify({ day_window: $json.day_window, energy: $json.energy, time_factor: $json.time_factor, peak_hours: $json.peak_hours, weather_ok: $json.weather_ok, rainy_hours: $json.rainy_hours, schedule: $json.schedule, dropped: $json.dropped, conflicts: $json.conflicts, other_days: $json.other_days, is_replan: $json.cmd === 'replan' }) }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You write a short Telegram message presenting a day schedule. Use only the plan data you are given. Never invent tasks, times or facts. Never mention field names such as weather_ok or time_factor.  Format (Telegram HTML): - Allowed tags only: <b>, <i>, <code>. No Markdown, no asterisks, no other tags. - First line: <b>Plan for {date}</b> - Then one line per block, in order: \"08:00–08:45 · emails\". Add \" (fixed)\" for fixed events, and the note in <i>italics</i> if there is one. - Then, only if there is something worth knowing, a blank line and at most 2 short sentences. Pick the most useful, in this order:   1. a conflict (start with <b>Conflict:</b>);   2. dropped tasks and why;   3. what changed, if is_replan is true;   4. an outdoor task moved because of rain;   5. otherwise, one sentence on block length, e.g. \"Blocks are about 40% longer than your estimates, based on how long tasks usually take you.\" - Do not repeat what a note already says. - If the forecast was unavailable, add \"(No forecast today.)\" only when there is an outdoor task. - If other_days is not empty, always end with one line: \"Not in this plan: gym (tomorrow 21:00)\", listing each item with its \"when\". Rules: - Do not comment on the person's health, sleep, mood or feelings, and give no wellbeing advice. Mention energy only as a scheduling reason. - Under 80 words. Plain, friendly, no emojis."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1648,
+        320
+      ],
+      "id": "26f384eb-07ee-47ef-ab21-415ea652bf27",
+      "name": "Write Plan",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---- Final Reply (step 9b) ----\n// Cleans the Writer's text so Telegram accepts it.\n// If the Writer failed, builds a plain message from the schedule instead.\n\nconst s = $('Build Schedule').first().json;\nconst esc = (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nlet text = String($input.first().json.text || '').trim();\n\n// Remove code fences, turn **bold** into <b>bold</b>\ntext = text.replace(/```[a-z]*\\n?/gi, '').replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>').trim();\n\n// Escape everything, then restore only the tags Telegram allows\ntext = esc(text).replace(/&lt;(\\/?)(b|i|code)&gt;/g, '<$1$2>');\n\n// If tags are unbalanced, remove them all (Telegram would reject the message)\nfor (const tag of ['b', 'i', 'code']) {\n  const open = (text.match(new RegExp(`<${tag}>`, 'g')) || []).length;\n  const close = (text.match(new RegExp(`</${tag}>`, 'g')) || []).length;\n  if (open !== close) text = text.replace(/<\\/?(b|i|code)>/g, '');\n}\n\n// Fallback when the Writer gave nothing usable\nif (text.length < 20) {\n  const lines = [`<b>Plan for ${esc(s.date_label)}</b>`, ''];\n  for (const b of s.schedule) {\n    lines.push(`${b.start}–${b.end} · ${esc(b.name)}${b.kind === 'fixed' ? ' (fixed)' : ''}${b.note ? ` <i>${esc(b.note)}</i>` : ''}`);\n  }\n  if (!s.schedule.length) lines.push('Nothing to schedule.');\n  if (s.dropped.length) lines.push('', `Dropped: ${esc(s.dropped.map(d => d.name).join(', '))} (no free slot).`);\n  if (s.conflicts.length) lines.push('', `<b>Conflict:</b> ${esc(s.conflicts.join('; '))}`);\n  text = lines.join('\\n');\n}\n\nreturn [{ json: { reply: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        320
+      ],
+      "id": "6c7ad841-09a0-4892-8715-888853857fe6",
+      "name": "Final Reply"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 329959528,
+          "mode": "list",
+          "cachedResultName": "profile",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=329959528"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": 2,
+            "peak_hours": "={{ $('Load Profile').first().json.peak_hours }}",
+            "recent_energy": "={{ $('Build Schedule').first().json.energy }}",
+            "last_plan_json": "={{ JSON.stringify($('Build Schedule').first().json.last_plan) }}",
+            "time_factor": "={{ $('Load Profile').first().json.time_factor }}",
+            "updated_at": "={{ $now.toISO() }}",
+            "blocked_hours": "={{ $('Load Profile').first().json.blocked_hours_raw }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "peak_hours",
+              "displayName": "peak_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "time_factor",
+              "displayName": "time_factor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recent_energy",
+              "displayName": "recent_energy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_plan_json",
+              "displayName": "last_plan_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "blocked_hours",
+              "displayName": "blocked_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2176,
+        304
+      ],
+      "id": "f6c7992f-99e8-4098-8de8-048fb3e9c0bf",
+      "name": "Save Plan Profile",
+      "retryOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2139319821,
+          "mode": "list",
+          "cachedResultName": "signals",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=2139319821"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $('Build Schedule').first().json.date }}",
+            "energy": "={{ $('Build Schedule').first().json.energy }}",
+            "weather_ok": "={{ $('Build Schedule').first().json.weather_ok }}",
+            "cmd": "={{ $('Build Schedule').first().json.cmd }}",
+            "raw_text": "={{ $('Parse Command').first().json.text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cmd",
+              "displayName": "cmd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "energy",
+              "displayName": "energy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "raw_text",
+              "displayName": "raw_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "weather_ok",
+              "displayName": "weather_ok",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2432,
+        240
+      ],
+      "id": "633f3c7e-e0d8-4454-a713-368311e110ff",
+      "name": "Save Plan Signal",
+      "retryOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "task_rows",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        0
+      ],
+      "id": "67ee1002-a5eb-4dd0-b845-a9192d2b682f",
+      "name": "Split Plan Tasks"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454",
+          "mode": "list",
+          "cachedResultName": "BetterRhythm DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10ENVlvSWb4FOqImrNM73Eq-Tc_QMwaOrq43CBWqW454/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "task",
+              "displayName": "task",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "planned_start",
+              "displayName": "planned_start",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "planned_end",
+              "displayName": "planned_end",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "planned_min",
+              "displayName": "planned_min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "actual_start",
+              "displayName": "actual_start",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "actual_end",
+              "displayName": "actual_end",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "actual_min",
+              "displayName": "actual_min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2592,
+        0
+      ],
+      "id": "7c05b83f-a4ba-40b2-8c24-751428f36a20",
+      "name": "Save Plan Tasks",
+      "retryOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "clIkVwUBJmOoCWso",
+          "name": "Google BetterRhythm"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a32ddcff-c526-428e-b461-8e5ce6cc9d53",
+              "name": "node",
+              "value": "={{ $prevNode.name }}",
+              "type": "string"
+            },
+            {
+              "id": "b0d7fe82-5dfb-4e29-b2b6-29d046df4697",
+              "name": "error",
+              "value": "={{ typeof $json.error === 'object' ? ($json.error.message || JSON.stringify($json.error)) : String($json.error ?? 'unknown error') }}",
+              "type": "string"
+            },
+            {
+              "id": "f32f3266-d721-41e3-8bf2-1ccf48f30257",
+              "name": "chat_id",
+              "value": "={{ $('Parse Command').first().json.chat_id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3072,
+        640
+      ],
+      "id": "9fd091be-cbf7-47e0-992d-c4232ffccfab",
+      "name": "Error Info",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "iFJN8Xdaf9CIrfBV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/iFJN8Xdaf9CIrfBV",
+          "cachedResultName": "BetterRhythm - SW-B Error Logger"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3312,
+        640
+      ],
+      "id": "01a5ff11-e163-432b-a853-23a681743899",
+      "name": "Log Error"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/calendar/v3/calendars/emile.montluc@gmail.com/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeMin",
+              "value": "={{ ($now.hour >= 17 ? $now.plus({ days: 1 }) : $now).startOf('day').toISO() }}"
+            },
+            {
+              "name": "timeMax",
+              "value": "={{ ($now.hour >= 17 ? $now.plus({ days: 1 }) : $now).endOf('day').toISO() }}"
+            },
+            {
+              "name": "singleEvents",
+              "value": "true"
+            },
+            {
+              "name": "orderBy",
+              "value": "startTime"
+            },
+            {
+              "name": "timeZone",
+              "value": "Europe/Paris"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        544,
+        224
+      ],
+      "id": "a87e4c39-8cf8-4672-9655-200f23a539f8",
+      "name": "Fetch Calendar",
+      "retryOnFail": true,
+      "waitBetweenTries": 2500,
+      "credentials": {
+        "googleApi": {
+          "id": "aWPYzNv7Gdve0j0E",
+          "name": "Google Calendar BetterRhythm"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/calendar/v3/calendars/4fd0e04e59204f723d7d7732411b1738ca125ce51b3c7f3ca77287c4ba0522bc@group.calendar.google.com/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeMin",
+              "value": "={{ DateTime.fromISO($json.date, { zone: 'Europe/Paris' }).startOf('day').toISO() }}"
+            },
+            {
+              "name": "timeMax",
+              "value": "={{ DateTime.fromISO($json.date, { zone: 'Europe/Paris' }).endOf('day').toISO() }}"
+            },
+            {
+              "name": "privateExtendedProperty",
+              "value": "betterrhythm=1"
+            },
+            {
+              "name": "singleEvents",
+              "value": "true"
+            },
+            {
+              "name": "maxResults",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1568,
+        -64
+      ],
+      "id": "f0518c25-759f-4ae0-90b6-1b24310ecc60",
+      "name": "List Old Blocks",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleApi": {
+          "id": "aWPYzNv7Gdve0j0E",
+          "name": "Google Calendar BetterRhythm"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---- Calendar Ops ----\n// Builds the list of calendar operations: delete the old BetterRhythm blocks\n// for this day, then create one event per planned task.\n\nconst CAL = '4fd0e04e59204f723d7d7732411b1738ca125ce51b3c7f3ca77287c4ba0522bc@group.calendar.google.com'; // the BetterRhythm calendar ID\nconst s = $('Build Schedule').first().json;\n\nlet old = [];\ntry { old = $('List Old Blocks').first().json.items || []; } catch (e) { old = []; }\n\nconst base = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CAL)}/events`;\nconst colors = { deep: '9', outdoor: '10', light: '5', fixed: '8' }; // blue, green, yellow, grey\nconst ops = [];\n\n// 1) Remove the previous plan's blocks for that day\nfor (const ev of old) {\n  ops.push({ method: 'DELETE', url: `${base}/${ev.id}`, send_body: false, body: {} });\n}\n\n// 2) Create the new blocks (fixed events are already in your own calendar)\nfor (const b of s.schedule.filter(b => !(b.kind === 'fixed' && b.note === 'from your calendar'))) {\n  ops.push({\n    method: 'POST',\n    url: base,\n    send_body: true,\n    body: {\n      summary: b.name,\n      description: b.note ? `BetterRhythm (${b.kind}): ${b.note}` : `BetterRhythm (${b.kind})`,\n      start: { dateTime: `${s.date}T${b.start}:00`, timeZone: 'Europe/Paris' },\n      end: { dateTime: `${s.date}T${b.end}:00`, timeZone: 'Europe/Paris' },\n      colorId: colors[b.kind] || '5',\n      extendedProperties: { private: { betterrhythm: '1' } },\n    },\n  });\n}\n\nreturn ops.map(o => ({ json: o }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -64
+      ],
+      "id": "2c4a4623-7b7d-4a4e-865e-93f6fe18853d",
+      "name": "Calendar Ops"
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2016,
+        -64
+      ],
+      "id": "3f1513e8-9fa6-4717-a3e1-a54aa4412b14",
+      "name": "Write Calendar",
+      "retryOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "aWPYzNv7Gdve0j0E",
+          "name": "Google Calendar BetterRhythm"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Command": {
+      "main": [
+        [
+          {
+            "node": "Load Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Command Router": {
+      "main": [
+        [
+          {
+            "node": "Fetch Weather",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Weather",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Profile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Profile": {
+      "main": [
+        [
+          {
+            "node": "Command Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Profile": {
+      "main": [
+        [
+          {
+            "node": "Save Profile",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Profile": {
+      "main": [
+        [
+          {
+            "node": "Save Signal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Signal": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Save Task Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Weather": {
+      "main": [
+        [
+          {
+            "node": "Fetch Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Extract",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Build Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Schedule": {
+      "main": [
+        [
+          {
+            "node": "Write Plan",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Plan Tasks",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "List Old Blocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write Plan",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Plan": {
+      "main": [
+        [
+          {
+            "node": "Final Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Reply": {
+      "main": [
+        [
+          {
+            "node": "Save Plan Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Plan Profile": {
+      "main": [
+        [
+          {
+            "node": "Save Plan Signal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Plan Signal": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Plan Tasks": {
+      "main": [
+        [
+          {
+            "node": "Save Plan Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Info": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Task Updates": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Plan Tasks": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Message": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Calendar": {
+      "main": [
+        [
+          {
+            "node": "Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Old Blocks": {
+      "main": [
+        [
+          {
+            "node": "Calendar Ops",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar Ops": {
+      "main": [
+        [
+          {
+            "node": "Write Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "iFJN8Xdaf9CIrfBV",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "77bcfb8a-f844-4a03-9bc2-2dcc10494c4b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6af719224529bfd282fedd26513eb114ddd42c0992f2167fe2ec18738b217da6"
+  },
+  "nodeGroups": [],
+  "id": "oRaKLmCgyCQI2BDU",
+  "tags": []
+}

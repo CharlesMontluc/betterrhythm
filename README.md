@@ -97,11 +97,26 @@ Check *Executions* in n8n: recent runs are green.
 - Planning continues without weather or calendar if those APIs fail.
 - The AI output is checked by a Structured Output Parser and a Validate node; if the AI fails, rules build the plan from the raw text.
 - If the Writer AI fails, a Code node writes a plain plan.
-- Expected failures go to Sub-workflow B, which logs them and replies to the user; unexpected crashes trigger the Error Workflow (Error Trigger), which alerts the developer.
-
 ## Screenshots
 
-See `docs/screenshots/`.
+| Main workflow | Sub-workflow A: load profile |
+| --- | --- |
+| ![Main workflow](docs/screenshots/01-main-canvas.png) | ![SW-A](docs/screenshots/03-sw-a-load-profile.png) |
+
+| Sub-workflow B: errors | Error alert |
+| --- | --- |
+| ![SW-B](docs/screenshots/02-sw-b-error-logger.png) | ![Error alert](docs/screenshots/08-error-handling.png) |
+
+| /plan reply | /done reply |
+| --- | --- |
+| ![Plan](docs/screenshots/04-telegram-plan.png) | ![Done](docs/screenshots/05-telegram-done.png) |
+
+| Google Calendar | Learned profile |
+| --- | --- |
+| ![Calendar](docs/screenshots/06-calendar.png) | ![Profile](docs/screenshots/09-sheet-profile.png) |
+
+![Executions](docs/screenshots/07-executions.png)- Expected failures go to Sub-workflow B, which logs them and replies to the user; unexpected crashes trigger the Error Workflow (Error Trigger), which alerts the developer.
+
 
 ## Secrets
 
